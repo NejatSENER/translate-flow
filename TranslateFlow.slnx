@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/TranslateFlow.Api/TranslateFlow.Api.csproj" />
+    <Project Path="src/TranslateFlow.Core/TranslateFlow.Core.csproj" />
+    <Project Path="src/TranslateFlow.Notifier/TranslateFlow.Notifier.csproj" />
+    <Project Path="src/TranslateFlow.Processing/TranslateFlow.Processing.csproj" />
+    <Project Path="src/TranslateFlow.Worker/TranslateFlow.Worker.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/TranslateFlow.Tests/TranslateFlow.Tests.csproj" />
+  </Folder>
+</Solution>
