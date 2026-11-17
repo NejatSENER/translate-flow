@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TranslateFlow</title>
+<style>
+:root { --bg:#f6f7f9; --card:#fff; --fg:#1b1f27; --muted:#5d6577; --line:#dde1e8; --accent:#2f5bea; --ok:#167a48; --bad:#b4342d; --warn:#9a6700; }
+@media (prefers-color-scheme: dark) { :root { --bg:#12151b; --card:#1a1e26; --fg:#e7e9ee; --muted:#9aa2b2; --line:#2c323e; --accent:#7d9bff; --ok:#5fd29a; --bad:#ff8a80; --warn:#f0c060; } }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; }
+main { max-width:860px; margin:0 auto; padding:32px 16px 64px; }
+h1 { margin:0 0 4px; font-size:1.6rem; }
+p.lead { margin:0 0 24px; color:var(--muted); }
+.card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:20px; margin-bottom:20px; }
+form { display:grid; gap:14px; }
+.row { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:14px; }
+label { display:grid; gap:6px; font-weight:600; font-size:.9rem; }
+input, select, textarea { font:inherit; color:inherit; background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:9px 11px; }
+textarea { min-height:120px; resize:vertical; }
+button { font:inherit; font-weight:600; border:0; border-radius:8px; padding:10px 16px; background:var(--accent); color:#fff; cursor:pointer; justify-self:start; }
+.hint { color:var(--muted); font-size:.85rem; font-weight:400; }
+.err { color:var(--bad); min-height:1.2em; margin:0; }
+table { width:100%; border-collapse:collapse; font-size:.9rem; }
+th, td { text-align:left; padding:8px 6px; border-bottom:1px solid var(--line); vertical-align:top; }
+th { color:var(--muted); font-weight:600; }
+.st { font-weight:700; }
+.st.Completed { color:var(--ok); } .st.Failed { color:var(--bad); } .st.Queued, .st.Extracting, .st.Translating { color:var(--warn); }
+.usage { display:flex; flex-wrap:wrap; gap:18px; color:var(--muted); font-size:.9rem; margin-top:12px; }
+.usage b { color:var(--fg); }
+a { color:var(--accent); }
+@media (max-width:600px) { td:nth-child(4), th:nth-child(4) { display:none; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>TranslateFlow</h1>
+  <p class="lead">Upload a .txt, .docx or .pdf file or paste text. The job is queued, translated by a worker, and you get an email when it is done.</p>
+
+  <section class="card">
+    <form id="form">
+      <div class="row">
+        <label>Email<input id="email" name="email" type="email" required placeholder="you@example.com"></label>
+        <label>From<select id="source" name="sourceLanguage"></select></label>
+        <label>To<select id="target" name="targetLanguage"></select></label>
+      </div>
+      <label>File <span class="hint">.txt, .docx or .pdf, up to 10 MB</span><input id="file" name="file" type="file" accept=".txt,.docx,.pdf"></label>
+      <label>…or text<textarea id="text" name="text" placeholder="Paste text here"></textarea></label>
+      <button type="submit">Translate</button>
+      <p class="err" id="err" role="alert"></p>
+    </form>
+  </section>
+
+  <section class="card">
+    <table>
+      <thead><tr><th>Input</th><th>Pair</th><th>Status</th><th>Tokens · cost</th><th></th></tr></thead>
+      <tbody id="jobs"><tr><td colspan="5" class="hint">Enter your email to see your jobs.</td></tr></tbody>
+    </table>
+    <div class="usage" id="usage"></div>
+  </section>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+let routes = [];
+
+async function loadRoutes() {
+  routes = await (await fetch('/api/routes')).json();
+  const sources = [...new Set(routes.map(r => r.sourceLanguage))];
+  $('source').innerHTML = sources.map(s => `<option>${esc(s)}</option>`).join('');
+  fillTargets();
+}
+function fillTargets() {
+  const t = routes.filter(r => r.sourceLanguage === $('source').value).map(r => r.targetLanguage);
+  $('target').innerHTML = t.map(s => `<option>${esc(s)}</option>`).join('');
+}
+$('source').addEventListener('change', fillTargets);
+
+$('form').addEventListener('submit', async e => {
+  e.preventDefault();
+  $('err').textContent = '';
+  const data = new FormData($('form'));
+  if (!$('file').files.length) data.delete('file');
+  if (!$('text').value.trim()) data.delete('text');
+  const res = await fetch('/api/jobs', { method: 'POST', body: data });
+  if (!res.ok) { const p = await res.json().catch(() => ({})); $('err').textContent = p.detail || `Request failed (${res.status})`; return; }
+  try { localStorage.setItem('tf.email', $('email').value); } catch {}
+  $('file').value = ''; $('text').value = '';
+  refresh();
+});
+
+async function refresh() {
+  const email = $('email').value.trim();
+  if (!email) return;
+  const [jobs, usage] = await Promise.all([
+    fetch('/api/jobs?email=' + encodeURIComponent(email)).then(r => r.json()),
+    fetch('/api/usage?email=' + encodeURIComponent(email)).then(r => r.json()),
+  ]);
+  $('jobs').innerHTML = jobs.length ? jobs.map(j => `<tr>
+      <td>${esc(j.fileName || 'text')}<br><span class="hint">${new Date(j.createdAt).toLocaleString()}</span></td>
+      <td>${esc(j.sourceLanguage)} → ${esc(j.targetLanguage)}</td>
+      <td><span class="st ${esc(j.status)}">${esc(j.status)}</span>${j.error ? `<br><span class="hint">${esc(j.error)}</span>` : ''}${j.notified ? '<br><span class="hint">emailed</span>' : ''}</td>
+      <td>${j.inputTokens != null ? `${j.inputTokens} → ${j.outputTokens}<br><span class="hint">$${Number(j.cost).toFixed(6)}</span>` : ''}</td>
+      <td>${j.status === 'Completed' ? `<a href="/api/jobs/${j.id}/result" target="_blank" rel="noopener">Result</a>` : ''}</td>
+    </tr>`).join('') : '<tr><td colspan="5" class="hint">No jobs yet.</td></tr>';
+  $('usage').innerHTML = `<span>Jobs <b>${usage.jobs}</b></span><span>Completed <b>${usage.completed}</b></span><span>Failed <b>${usage.failed}</b></span><span>Tokens <b>${usage.inputTokens} → ${usage.outputTokens}</b></span><span>Cost <b>$${Number(usage.cost).toFixed(6)}</b></span>`;
+}
+$('email').addEventListener('change', refresh);
+
+const fromLink = new URLSearchParams(location.search).get('email');
+try { $('email').value = fromLink || localStorage.getItem('tf.email') || ''; } catch { $('email').value = fromLink || ''; }
+loadRoutes().then(refresh);
+setInterval(refresh, 2000);
+</script>
+</body>
+</html>
