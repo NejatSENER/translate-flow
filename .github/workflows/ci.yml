@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore tools
+        run: dotnet tool restore
+
+      - name: Build
+        run: dotnet build TranslateFlow.slnx -c Release -warnaserror
+
+      - name: Check migrations are up to date
+        run: dotnet ef migrations has-pending-model-changes --project src/TranslateFlow.Core --startup-project src/TranslateFlow.Api --no-build --configuration Release
+
+      - name: Tests (Testcontainers)
+        run: dotnet test TranslateFlow.slnx -c Release --no-build
+
+  images:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build the three service images
+        run: docker compose build api worker notifier
