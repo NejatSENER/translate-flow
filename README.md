@@ -108,6 +108,7 @@ Unit tests cover extraction from all three formats, chunking under a token budge
 - Blob storage: files go to a local or volume-mounted folder behind an `IFileStore` interface.
 - Observability: structured logs only. OpenTelemetry traces across the three services would be the next step.
 - Cleaning up old outbox rows and stored files.
+- The notifier prefers a missing email to a duplicate one: if it crashes after marking a job as notified and before the SMTP call, that email is not sent. A notification lease (like the worker's job lease) would close this gap.
 
 ## License
 
