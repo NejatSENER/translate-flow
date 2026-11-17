@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>dotnet-TranslateFlow.Worker-fd160a9f-9a26-4758-9e98-918c27484a3b</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.7" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\TranslateFlow.Core\TranslateFlow.Core.csproj" />
+    <ProjectReference Include="..\TranslateFlow.Processing\TranslateFlow.Processing.csproj" />
+  </ItemGroup>
+</Project>
