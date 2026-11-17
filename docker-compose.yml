@@ -1,0 +1,76 @@
+x-app: &app
+  environment: &app-env
+    ConnectionStrings__Postgres: Host=postgres;Username=translateflow;Password=translateflow_dev;Database=translateflow;Gss Encryption Mode=Disable
+    ConnectionStrings__RabbitMq: amqp://translateflow:translateflow_dev@rabbitmq:5672/
+    Storage__Root: /data
+  volumes:
+    - files:/data
+  depends_on:
+    postgres:
+      condition: service_healthy
+    rabbitmq:
+      condition: service_healthy
+
+services:
+  api:
+    <<: *app
+    build: { context: ., args: { PROJECT: TranslateFlow.Api } }
+    environment:
+      <<: *app-env
+      Database__MigrateOnStartup: "true"
+    ports:
+      - "8080:8080"
+
+  worker:
+    <<: *app
+    build: { context: ., args: { PROJECT: TranslateFlow.Worker } }
+    environment:
+      <<: *app-env
+      Translation__Provider: ${TRANSLATION_PROVIDER:-Pseudo}
+      Translation__OllamaUrl: http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  notifier:
+    <<: *app
+    build: { context: ., args: { PROJECT: TranslateFlow.Notifier } }
+    environment:
+      <<: *app-env
+      Smtp__Host: mailpit
+      Smtp__Port: "1025"
+      Smtp__PublicUrl: http://localhost:8080
+
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: translateflow
+      POSTGRES_PASSWORD: translateflow_dev
+      POSTGRES_DB: translateflow
+    ports:
+      - "5434:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U translateflow"]
+      interval: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:4-management
+    environment:
+      RABBITMQ_DEFAULT_USER: translateflow
+      RABBITMQ_DEFAULT_PASS: translateflow_dev
+    ports:
+      - "5673:5672"
+      - "15673:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      retries: 10
+
+  mailpit:
+    image: axllent/mailpit:v1.27
+    ports:
+      - "1026:1025"
+      - "8026:8025"
+
+volumes:
+  files:
